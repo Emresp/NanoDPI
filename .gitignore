@@ -1,0 +1,8 @@
+# CLion ve IDE dosyaları
+.idea/
+cmake-build-*/
+
+# Derlenmiş dosyalar
+*.exe
+*.obj
+*.pdb
