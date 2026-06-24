@@ -4,6 +4,7 @@
 #define NANODPI_PROXYSERVER_H
 //Soket progralama için gerekli olan kütüphane
 #include <winsock2.h>
+#include <thread>
 
 class ProxyServer
 {
@@ -18,6 +19,11 @@ class ProxyServer
     private:
     //SOCKET yapısında serversocket adında socket bilgilerini tutucak değişken
     SOCKET serverSocket;
+
+    //Yakalanan istekler üzerinden işlem yapabilmek için
+    void handleClient(SOCKET clientSocket);
+
+
 
 
 };

@@ -84,6 +84,41 @@ void ProxyServer::start()
     {
         cout << "Proxy 127.0.0.1:8080 uzerinde dinleniyor ";
     }
+
+    //paketleri her zaman yakalayabilmesi için sonsuz döngü
+    while (true)
+    {
+        //Yakalanan istekleri tutabilmek için değişken
+            sockaddr_in clientAddress;
+
+        //tutulan isteklerin boyutu
+        int clientSize=sizeof(clientAddress);
+
+        //Adresler bu kısımda yakalanır
+        //ilk parametre hangi sokete bakması gerektiği
+        //ikinci parameterede ise casting işlemi ile yakalanan parametlerin hangi adrese gitmesi gerektiği
+        //üçüncü parametre ile ise boyut tutulur
+        //yakalanan isteklerin işlenebilmesi için fonksiyona verilmesi gerekir, fonksiyona verebilmek için clientSockete atadık
+        SOCKET clientSocket=accept(serverSocket, (sockaddr*)&clientAddress, &clientSize);
+
+        //istek eğer boşsa durmasın hemen devam etsin çünkü bilgisayarımızda saniylerde 100lerce istek gidiyor
+        if (clientSocket == INVALID_SOCKET)
+        {
+            continue;
+        }
+
+        //istekleri işlerken bu döngünün içinde direk fonksiyuna verirsek zaman kaybı yaşarız çünkü diğer isteği yaklamak için işlemin bitmesi beklenir
+        //Beklemeden dolayı diğer istekleri kaybedebiliriz ve pingimiz çıkar
+        //Bu durumların önüne geçebilmek için thread yani paralel işlem gücünü kullanacz. Gelen istek thread dolayı döngüden çıkar ramde başka bir yerde işlem görür
+        //Thread sayesinde işlemlerin birbrini beklemsine gerek kalmaz her istek bağımsız ve paralel olarak işlenir
+        thread(&ProxyServer::handleClient, this, clientSocket).detach();
+        //detach ile ise işlendikten sonra kendi kendini ramde temizlemesi ve ramde birikme yapmamamsı için gerekli olan fonksiyondur
+
+    }
+}
+
+void ProxyServer::handleClient(SOCKET clientSocket) {
+    cout << "Yeni bir baglanti yakalandi!" << endl;
 }
 
 
