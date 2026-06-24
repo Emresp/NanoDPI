@@ -2,6 +2,7 @@
 int main()
 {
     ProxyServer server;
+    server.start();
 
     return 0;
 }

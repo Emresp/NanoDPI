@@ -11,6 +11,15 @@ class ProxyServer
     //Kurucu ve yıkıcı metotlar
     ProxyServer();
     ~ProxyServer();
+
+    //Socketi tek tuşla başlatmak için start metodu
+    void start();
+
+    private:
+    //SOCKET yapısında serversocket adında socket bilgilerini tutucak değişken
+    SOCKET serverSocket;
+
+
 };
 
 #endif //NANODPI_PROXYSERVER_H
