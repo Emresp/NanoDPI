@@ -28,6 +28,8 @@ ProxyServer::ProxyServer()
 //Yıkıcı metot tanımlama
 ProxyServer::~ProxyServer()
 {
+
+    setSystemProxy(false);
     WSACleanup();
 }
 
@@ -85,6 +87,8 @@ void ProxyServer::start()
         cout << "Proxy 127.0.0.1:8080 uzerinde dinleniyor ";
     }
 
+    setSystemProxy(true);
+
     //paketleri her zaman yakalayabilmesi için sonsuz döngü
     while (true)
     {
@@ -119,6 +123,42 @@ void ProxyServer::start()
 
 void ProxyServer::handleClient(SOCKET clientSocket) {
     cout << "Yeni bir baglanti yakalandi!" << endl;
+}
+
+void ProxyServer::setSystemProxy(bool enable)
+{
+    HKEY hKey;
+
+    //HKEY_CURRENT_USER parametersi aktif açık olan oturumu vfonksiyona verir
+    //İkinci parametere register defterinde değişmesi gereken dosyayanın adresi
+    //0 parametersi varsayılan kullan demektir
+    //KEY_SET_VALUE klasörü sadece değiştirmek için açıyoruz anlamına gelir işletim sistemine söylüyoruz
+    //Klasör açıldığı zaman &hKey paramtersi ile klasörün adresini tutuyoruz
+    RegOpenKeyExA(HKEY_CURRENT_USER, "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", 0, KEY_SET_VALUE, &hKey);
+
+    if (enable)
+    {
+        //Proxyi aktif ediyoruz true
+        DWORD proxyEnable = 1;
+        //ilk parametere  RegOpenKeyExA fonksiyonu ile açtığımız dosyayı verir
+        //ikinci parametre değişicek olan ayarın adı
+        //0 parametersi default değer
+        RegSetValueExA(hKey, "ProxyEnable", 0, REG_DWORD, (const BYTE*)&proxyEnable, sizeof(proxyEnable));
+
+        // 2. ProxyServer adresini bizim programımız olarak ayarla
+        const char* proxyServer = "127.0.0.1:8080";
+        RegSetValueExA(hKey, "ProxyServer", 0, REG_SZ, (const BYTE*)proxyServer, strlen(proxyServer));
+    }
+    else
+    {
+        DWORD proxyEnable = 0;
+        RegSetValueExA(hKey, "ProxyEnable", 0, REG_DWORD, (const BYTE*)&proxyEnable, sizeof(proxyEnable));
+    }
+    RegCloseKey(hKey);
+
+    InternetSetOptionA(NULL, INTERNET_OPTION_SETTINGS_CHANGED, NULL, 0);
+    InternetSetOptionA(NULL, INTERNET_OPTION_REFRESH, NULL, 0);
+
 }
 
 

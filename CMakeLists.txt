@@ -7,4 +7,4 @@ add_executable(NanoDPI src/main.cpp
         include/ProxyServer.h
         src/ProxyServer.cpp)
 
-target_link_libraries(NanoDPI ws2_32)
+target_link_libraries(NanoDPI ws2_32 wininet)

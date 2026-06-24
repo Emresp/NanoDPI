@@ -5,6 +5,7 @@
 //Soket progralama için gerekli olan kütüphane
 #include <winsock2.h>
 #include <thread>
+#include <wininet.h>
 
 class ProxyServer
 {
@@ -22,6 +23,9 @@ class ProxyServer
 
     //Yakalanan istekler üzerinden işlem yapabilmek için
     void handleClient(SOCKET clientSocket);
+
+    //Windows proxy ayarlarını yönetebilmek için
+    void setSystemProxy(bool enable);
 
 
 
