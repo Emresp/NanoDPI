@@ -1,5 +1,7 @@
 #include "../include/ProxyServer.h"
 #include <iostream>
+#include <string>
+#include <sstream>
 #pragma comment(lib, "ws2_32.lib") //Ağ kütüphanesi derleyici ile bağlamak için
 using namespace std;
 
@@ -122,7 +124,49 @@ void ProxyServer::start()
 }
 
 void ProxyServer::handleClient(SOCKET clientSocket) {
-    cout << "Yeni bir baglanti yakalandi!" << endl;
+    //Gelen istekleri tutucak değişken
+    char buffer[8192] = {0};
+
+    //ilk değişken yakaladığımız istek
+    //ikinci değişken veriyi yazacağımız yer
+    //stringlerin sonuna 1baytlık \0 karakteri geldiği içiçn -1 yaptık yer kısmında
+    //0 deafult değer
+    int bytesRead=recv(clientSocket, buffer, sizeof(buffer)-1, 0);
+
+    //Yakalanan istek baytlarını stringe çeviriyoruz
+    string request(buffer);
+
+    //Kelime kelime bölmek için
+    stringstream ss(request);
+    //bölünmüş kelimelerin ilk üçünü değişken içine alıyoruz
+    string method, url, version;
+
+    ss >> method >> url >> version;
+
+    if(bytesRead > 0)
+    {
+
+        string host;
+        string port;
+
+        //url'i port ve host olarak parçalama işlemi
+        //find fonksiyonu sayesinde : işaretinin indexini öğreniriz
+        size_t ikinokta = url.find(":");
+        if (ikinokta != string::npos)
+        {
+            host = url.substr(0, ikinokta);
+
+            port =url.substr(ikinokta+1);
+        }
+        else
+        {
+            host = url;
+            port = "80";
+        }
+
+        cout << "Yontem: " << method << " | Host: " << host << " | Port: " << port << endl;
+
+    }
 }
 
 void ProxyServer::setSystemProxy(bool enable)
