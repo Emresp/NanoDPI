@@ -2,6 +2,7 @@
 #include <iostream>
 #include <string>
 #include <sstream>
+#include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib") //Ağ kütüphanesi derleyici ile bağlamak için
 using namespace std;
 
@@ -145,7 +146,6 @@ void ProxyServer::handleClient(SOCKET clientSocket) {
 
     if(bytesRead > 0)
     {
-
         string host;
         string port;
 
@@ -166,6 +166,76 @@ void ProxyServer::handleClient(SOCKET clientSocket) {
 
         cout << "Yontem: " << method << " | Host: " << host << " | Port: " << port << endl;
 
+        //DNS rehberinden hangi ip adresleri getirmesi gerektiğini filtreledik
+        struct addrinfo hints;
+        ZeroMemory(&hints, sizeof(hints));//klasik çöp değerleri sıfırlama işlemi
+        hints.ai_family = AF_UNSPEC;//ipv4 ipv6 fark etmez
+        hints.ai_socktype = SOCK_STREAM; //TCP
+
+        //Dönen ip adreslerini linked list olarak tutucaz
+        struct addrinfo* result=nullptr;
+
+        //isteklerde bulunan adreslerin dnsini öğrenmek için getaddrinfo fonksiyonu kullandık
+        //.c_str metotları string olarak tuttuğumuz bilgileri bilgisyarın anlayabilceği hale çevirir
+        //hints ile filtrelediğimiz özzelikte bulunan dnsleri verir ve soket uyuşmazlığı yaşamayız biz sadece tcp bakmalıyız mesele
+        //result ise DNSni öğrenmek istediğimiz adresi dnslerini toplar ve linked list şeklinde tutar
+        //getaddrinfo fonksiyonumuz bu işlemleri yapar ve sadece integer değer döner işlemin başarılı olup olmadığı hakkında
+        int dnsStatus=getaddrinfo(host.c_str(), port.c_str(), &hints, &result);
+
+        if(dnsStatus != 0)
+        {
+            //adres bulunamadıysa ya da başka bir hata olduysa
+            cerr << "getaddrinfo() failed ";
+            return;
+        }
+
+        cout << "[+] DNS Basarili! " << host << " icin IP listesi alindi." << endl;
+
+        //Bulduğumuz ip adreslerini test edebilmek için socket açıyoruz
+        SOCKET targetSocket=INVALID_SOCKET;
+
+        //Linked list yani ip adreslerinin olduğu listede gezebilmek için pointer
+        struct addrinfo* ptr=nullptr;
+
+        //Listenin en başından başlayarak gezen for döngüsü
+        for (ptr = result; ptr != nullptr; ptr = ptr->ai_next)
+        {
+            //Socket bilgilerini giriyoruz ve socket fonksiyonun geri dönüşünü almak için targetsockete eştiliyoruz
+            //Socket özzelikleriyle birlikte başarılı şekilde oluşabiliyorsa zaten işletim sistemini onu oluşturur
+            targetSocket=socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
+
+            //Soket kontrolü
+            if (targetSocket == INVALID_SOCKET)
+            {
+                continue;
+            }
+
+            //İp adresi ile bağlantı kurmak için gerekli fonksiyon
+            //ilk parametersi az önce açtığımız soket üzerinden bağlantı denemsi yapılcağını beliritri
+            //İkinci parametere bağlanamsını istediğimiz ip adresi
+            //Üçüncü parametre güvenlik amaçlı bellekte fazla yer okumaması için şu anki ip adresin uzunluğunu gireriz
+            //durumu kontrol etmek için değişkene atadık
+            int connect_kontrol=connect(targetSocket, ptr->ai_addr, (int)ptr->ai_addrlen);
+
+            //Bağlantı kontrolü
+            if (connect_kontrol==0)
+            {
+                break;
+            }
+            else
+            {
+                closesocket(targetSocket);
+            }
+        }
+
+        freeaddrinfo(result);
+
+        if (targetSocket == INVALID_SOCKET)
+        {
+            cout<<"DNS not connect";
+        }
+
+        cout<<"DNS connect";
     }
 }
 
