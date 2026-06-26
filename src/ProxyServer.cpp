@@ -236,6 +236,77 @@ void ProxyServer::handleClient(SOCKET clientSocket) {
         }
 
         cout<<"DNS connect";
+
+        //İp adresi ile bağlantı sağlandıysa gelen isteğe karşı cevap olarak 200 OK cevabını verdik bağlantı başarılı anlamında
+        if (method == "CONNECT")
+        {
+            const char* okMessage = "HTTP/1.1 200 Connection Established\r\n\r\n";
+            send(clientSocket, okMessage, strlen(okMessage), 0);
+        }
+
+        fd_set sockets_tepsisi;
+
+        while (true)
+        {
+            FD_ZERO(&sockets_tepsisi);
+            //Soketleri senkronize edebilmek için gerekli olan veri yapısı
+            //Hedef yani doğru adreslerin olduğu soket ile kullanıcnın isteklerinin olduğu clientssocket değişkenini aynı kümeye koyduk
+            FD_SET(clientSocket, &sockets_tepsisi);
+            FD_SET(targetSocket, &sockets_tepsisi);
+
+            //Kümelediğimiz soketlere bakarak içine veri gelen soket sayısını döndürür
+            int activity = select(0, &sockets_tepsisi, nullptr, nullptr, nullptr);
+
+            //kontrol
+            if (activity == SOCKET_ERROR)
+            {
+                break;
+            }
+
+            //Durum kontrolü yapılır kümelediğimiz soketlerden hangisi veri akışı yapıyor
+            //Eğer clientten sunucya istek gidiyorsa
+            if (FD_ISSET(clientSocket, &sockets_tepsisi))
+            {
+                //veri akışını tutabilmek için değişken
+                char tunelBuffer[8192];
+                //Okuma işlemi
+                int bytesRead=recv(clientSocket, tunelBuffer, sizeof(tunelBuffer), 0);
+
+                if (bytesRead <= 0)
+                {
+                    break;
+                }
+
+                //Kümelenen soketlerden az önce hangisine veri geldiğini tespit etmiştik
+                //Şimdi hangisinden veri geliyorsa bir diğerine aktarmak yani haberleştirmek için
+                //Bu sayade iki soket bir biri ile konuşmuş olur
+                send(targetSocket, tunelBuffer, bytesRead, 0);
+                //Tek yönlü olarak clinetten suncuya veri akışı sağlanmış oldu
+            }
+
+            //Sunucudan clientte istek gidiyorsa
+            if (FD_ISSET(targetSocket, &sockets_tepsisi))
+            {
+                char tunelBuffer[8192];
+
+                //okuma işlemi
+                //İlk parametre ile gelen veri okundu yani sunucudan gelen veriyi okuduk tunnelBuffer'ın içine yazdık
+                //İkinci parametre verinin okunurken yazıldığı yer yani taşıyacağımız değişken
+                //Üçüncü parametre ise taşma olmaması için kovamızın büyüklüğünü söylüyor ve tek seferde o kadarlık veri taşıyor
+                int bytesRead=recv(targetSocket, tunelBuffer, sizeof(tunelBuffer), 0);
+
+                //Okunan byte sayısı ne zaman sıfırdan küçükse yani artık okuncan byte olmadıysa o zaman döngüyü bitir
+                if (bytesRead <= 0)
+                {
+                    break;
+                }
+
+                //recv ile az önce sunucadan gelen verileri okumuştuk ve tunnelBuffer ile taşımak için tutmuştuk
+                //tutuğumuz verileri şimdi send ile cliente gönderiyoruz ve haberleşme tamamlanmış oluyor
+                send(clientSocket, tunelBuffer, bytesRead, 0);
+
+            }
+        }
     }
 }
 
