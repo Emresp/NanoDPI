@@ -2,9 +2,27 @@
 #include <iostream>
 #include <string>
 #include <sstream>
+#include <cstring>
 #include <ws2tcpip.h>
-#pragma comment(lib, "ws2_32.lib") //Ağ kütüphanesi derleyici ile bağlamak için
+#include <windows.h>
+
+#pragma comment(lib, "ws2_32.lib")
+#pragma comment(lib, "wininet.lib") //Ağ kütüphanesi derleyici ile bağlamak için
 using namespace std;
+
+//Veri bitene kadar send çağrısını tekrarlar
+//Kendimiz maneul send çağırdığımız zaman hepsini kontrol etmeye biliyor bu fonksiyon sayesinde oto yaptık
+bool sendAll(SOCKET s, const char* data, int len)
+{
+    int totalSent = 0;
+    while (totalSent < len)
+    {
+        int sent = send(s, data + totalSent, len - totalSent, 0);
+        if (sent <= 0) return false;
+        totalSent += sent;
+    }
+    return true;
+}
 
 //Kurucu Metot tanımlama
 ProxyServer::ProxyServer()
@@ -20,11 +38,12 @@ ProxyServer::ProxyServer()
     //kontrol
     if (result != 0)
     {
-        cerr << "WSAStartup() failed ";
+        cerr << "WSAStartup() failed "<< WSAGetLastError() << endl;
+        return;
     }
     else
     {
-        cout << "WSAStartup() succeeded ";
+        cout << "WSAStartup() succeeded "<< endl;
     }
 }
 
@@ -32,7 +51,7 @@ ProxyServer::ProxyServer()
 ProxyServer::~ProxyServer()
 {
 
-    setSystemProxy(false);
+    //setSystemProxy(false);
     WSACleanup();
 }
 
@@ -47,6 +66,7 @@ void ProxyServer::start()
     if (serverSocket == INVALID_SOCKET)
     {
         cerr << "socket() failed ";
+        return;
     }
     else
     {
@@ -56,10 +76,12 @@ void ProxyServer::start()
     //sockaddr_in yapısında serverAddress değişkeni oluşturduk bu değişken ıp ve portu birlikte tutar
     sockaddr_in serverAddress;
 
+    ZeroMemory(&serverAddress, sizeof(serverAddress));
+
     //yukarıda ıpv4 ile oluşturduğumuz socketi burada da eşlebilmesi için ipv4 olarak seçiyoruz
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_addr.s_addr = inet_addr("127.0.0.1"); //inet_addr ip adresini bilgisayarın anlayabileceği şekle getirir
-    serverAddress.sin_port = htons(8080);// Little Endian yani pc tersten yazdığı için sayıları biz internetin anlayabileceği düz şekle htons ile getirdik
+    serverAddress.sin_port = htons(8081);// Little Endian yani pc tersten yazdığı için sayıları biz internetin anlayabileceği düz şekle htons ile getirdik
 
     //oluşturduğumuz serverAddress değişkenini  kendi oluşturduğumuz sockete mbağlıyoruz bind ediyoruz
     //(sockaddr*)&serverAddress casting işlemi var
@@ -68,11 +90,12 @@ void ProxyServer::start()
     //bind işlemi kontrol
     if (bind_control == SOCKET_ERROR)
     {
-        cerr << "bind() failed ";
+        cerr << "bind() failed "<< endl;
+        return;
     }
     else
     {
-        cout << "bind() succeeded ";
+        cout << "bind() succeeded "<< endl;
     }
 
     //oluşturduğumuz soketi dinleyebilmek izleybilmek için gerekli  fonksiyon
@@ -83,14 +106,16 @@ void ProxyServer::start()
     //listen işlemi kontrolü
     if (listen_control == SOCKET_ERROR)
     {
-        cerr << "listen() failed ";
+        cerr << "listen() failed: " << WSAGetLastError() << endl;
+        closesocket(serverSocket);
+        return;
     }
     else
     {
-        cout << "Proxy 127.0.0.1:8080 uzerinde dinleniyor ";
+        cout << "Proxy 127.0.0.1:8081 uzerinde dinleniyor "<< endl;
     }
 
-    setSystemProxy(true);
+   // setSystemProxy(true);
 
     //paketleri her zaman yakalayabilmesi için sonsuz döngü
     while (true)
@@ -144,6 +169,15 @@ void ProxyServer::handleClient(SOCKET clientSocket) {
 
     ss >> method >> url >> version;
 
+    if (method != "CONNECT")
+    {
+        // Tarayıcıya "Ben sadece HTTPS destekliyorum" cevabı veriyoruz
+        const char* msg = "HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\n\r\n";
+        send(clientSocket, msg, strlen(msg), 0);
+        closesocket(clientSocket);
+        return; // Fonksiyondan çık, işlemi bitir
+    }
+
     if(bytesRead > 0)
     {
         string host;
@@ -161,7 +195,7 @@ void ProxyServer::handleClient(SOCKET clientSocket) {
         else
         {
             host = url;
-            port = "80";
+            port = "443";
         }
 
         cout << "Yontem: " << method << " | Host: " << host << " | Port: " << port << endl;
@@ -185,8 +219,10 @@ void ProxyServer::handleClient(SOCKET clientSocket) {
         if(dnsStatus != 0)
         {
             //adres bulunamadıysa ya da başka bir hata olduysa
-            cerr << "getaddrinfo() failed ";
+            cerr << "getaddrinfo() failed: " << dnsStatus << endl;
+            closesocket(clientSocket);
             return;
+
         }
 
         cout << "[+] DNS Basarili! " << host << " icin IP listesi alindi." << endl;
@@ -207,7 +243,9 @@ void ProxyServer::handleClient(SOCKET clientSocket) {
             //Soket kontrolü
             if (targetSocket == INVALID_SOCKET)
             {
-                continue;
+                cout << "Target connect failed" << endl;
+                closesocket(clientSocket);
+                return;
             }
 
             //İp adresi ile bağlantı kurmak için gerekli fonksiyon
@@ -220,6 +258,12 @@ void ProxyServer::handleClient(SOCKET clientSocket) {
             //Bağlantı kontrolü
             if (connect_kontrol==0)
             {
+                //windowstaki Nagle algoritmasını kapatmak için gerekli fonksiyon
+                //Nagle algoritması çok küçük bir paketi tek başına göndermek yerine bekler arkasından gelen paketle birleştirip gönderir
+                //Bu olay ise bizim ISS anlamasın diye parça parça gönderme işlemimize ters düşer
+                int flag = 1;
+                setsockopt(targetSocket, IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(int));
+
                 break;
             }
             else
@@ -232,32 +276,42 @@ void ProxyServer::handleClient(SOCKET clientSocket) {
 
         if (targetSocket == INVALID_SOCKET)
         {
-            cout<<"DNS not connect";
+            cout << "Target connect failed" << endl;
+            closesocket(clientSocket);
+            return;
         }
 
-        cout<<"DNS connect";
+        cout << "Target connected" << endl;
 
         //İp adresi ile bağlantı sağlandıysa gelen isteğe karşı cevap olarak 200 OK cevabını verdik bağlantı başarılı anlamında
         if (method == "CONNECT")
         {
             const char* okMessage = "HTTP/1.1 200 Connection Established\r\n\r\n";
-            send(clientSocket, okMessage, strlen(okMessage), 0);
+
+            if (!sendAll(clientSocket, okMessage, (int)strlen(okMessage)))
+            {
+                closesocket(clientSocket);
+                closesocket(targetSocket);
+                return;
+            }
         }
 
         fd_set sockets_tepsisi;
 
+        bool ilkPaketMi = true;
+
+
         while (true)
         {
-            FD_ZERO(&sockets_tepsisi);
             //Soketleri senkronize edebilmek için gerekli olan veri yapısı
             //Hedef yani doğru adreslerin olduğu soket ile kullanıcnın isteklerinin olduğu clientssocket değişkenini aynı kümeye koyduk
+            FD_ZERO(&sockets_tepsisi);
             FD_SET(clientSocket, &sockets_tepsisi);
             FD_SET(targetSocket, &sockets_tepsisi);
 
             //Kümelediğimiz soketlere bakarak içine veri gelen soket sayısını döndürür
             int activity = select(0, &sockets_tepsisi, nullptr, nullptr, nullptr);
 
-            //kontrol
             if (activity == SOCKET_ERROR)
             {
                 break;
@@ -267,45 +321,73 @@ void ProxyServer::handleClient(SOCKET clientSocket) {
             //Eğer clientten sunucya istek gidiyorsa
             if (FD_ISSET(clientSocket, &sockets_tepsisi))
             {
-                //veri akışını tutabilmek için değişken
                 char tunelBuffer[8192];
                 //Okuma işlemi
-                int bytesRead=recv(clientSocket, tunelBuffer, sizeof(tunelBuffer), 0);
+                int bytesRcvd = recv(clientSocket, tunelBuffer, sizeof(tunelBuffer), 0);
 
-                if (bytesRead <= 0)
+                if (bytesRcvd <= 0)
                 {
                     break;
                 }
 
-                //Kümelenen soketlerden az önce hangisine veri geldiğini tespit etmiştik
-                //Şimdi hangisinden veri geliyorsa bir diğerine aktarmak yani haberleştirmek için
-                //Bu sayade iki soket bir biri ile konuşmuş olur
-                send(targetSocket, tunelBuffer, bytesRead, 0);
-                //Tek yönlü olarak clinetten suncuya veri akışı sağlanmış oldu
+                // İlk client paketini bölüyoruz.
+                // HTTPS CONNECT sonrası ilk gelen veri genelde TLS ClientHello olur.
+                if (ilkPaketMi && bytesRcvd > 5)
+                {
+                    //Giden byteların nerden bölünceğini tutan değişken
+                    int bolunmeNoktasi = 1;
+
+                    if (!sendAll(targetSocket, tunelBuffer, bolunmeNoktasi))
+                    {
+                        break;
+                    }
+
+                    //Böldüğümüz kısımların arasına bekleme süresi koyuruz bunun sebebi işletim sistemiz ya da herhangi başka bir ağ sağlayıcısı istekleri bekletip gönderirse diye
+                    Sleep(10);
+
+                    if (!sendAll(targetSocket, tunelBuffer + bolunmeNoktasi, bytesRcvd - bolunmeNoktasi))
+                    {
+                        break;
+                    }
+
+                    cout << "[*] DPI Split: ClientHello bolundu "
+                         << bolunmeNoktasi << " + "
+                         << (bytesRcvd - bolunmeNoktasi)
+                         << " byte" << endl;
+
+                    ilkPaketMi = false;
+                }
+                else
+                {
+                    if (!sendAll(targetSocket, tunelBuffer, bytesRcvd))
+                    {
+                        break;
+                    }
+                }
             }
 
             //Sunucudan clientte istek gidiyorsa
             if (FD_ISSET(targetSocket, &sockets_tepsisi))
             {
                 char tunelBuffer[8192];
-
                 //okuma işlemi
                 //İlk parametre ile gelen veri okundu yani sunucudan gelen veriyi okuduk tunnelBuffer'ın içine yazdık
                 //İkinci parametre verinin okunurken yazıldığı yer yani taşıyacağımız değişken
                 //Üçüncü parametre ise taşma olmaması için kovamızın büyüklüğünü söylüyor ve tek seferde o kadarlık veri taşıyor
-                int bytesRead=recv(targetSocket, tunelBuffer, sizeof(tunelBuffer), 0);
+                int bytesRcvd = recv(targetSocket, tunelBuffer, sizeof(tunelBuffer), 0);
 
-                //Okunan byte sayısı ne zaman sıfırdan küçükse yani artık okuncan byte olmadıysa o zaman döngüyü bitir
-                if (bytesRead <= 0)
+                if (bytesRcvd <= 0) break;
+
+                if (!sendAll(clientSocket, tunelBuffer, bytesRcvd))
                 {
                     break;
                 }
-
-                //recv ile az önce sunucadan gelen verileri okumuştuk ve tunnelBuffer ile taşımak için tutmuştuk
-                //tutuğumuz verileri şimdi send ile cliente gönderiyoruz ve haberleşme tamamlanmış oluyor
-                send(clientSocket, tunelBuffer, bytesRead, 0);
-
             }
+        }
+
+        closesocket(clientSocket);
+        if (targetSocket != INVALID_SOCKET) {
+            closesocket(targetSocket);
         }
     }
 }
@@ -331,7 +413,7 @@ void ProxyServer::setSystemProxy(bool enable)
         RegSetValueExA(hKey, "ProxyEnable", 0, REG_DWORD, (const BYTE*)&proxyEnable, sizeof(proxyEnable));
 
         // 2. ProxyServer adresini bizim programımız olarak ayarla
-        const char* proxyServer = "127.0.0.1:8080";
+        const char* proxyServer = "127.0.0.1:8081";
         RegSetValueExA(hKey, "ProxyServer", 0, REG_SZ, (const BYTE*)proxyServer, strlen(proxyServer));
     }
     else
