@@ -1,11 +1,12 @@
 #include "../include/ProxyServer.h"
+#include "../include/Logger.h"
+#include "../include/Config.h"
 #include <iostream>
 #include <string>
 #include <sstream>
 #include <cstring>
 #include <ws2tcpip.h>
 #include <windows.h>
-
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "wininet.lib") //Ağ kütüphanesi derleyici ile bağlamak için
 using namespace std;
@@ -81,7 +82,7 @@ void ProxyServer::start()
     //yukarıda ıpv4 ile oluşturduğumuz socketi burada da eşlebilmesi için ipv4 olarak seçiyoruz
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_addr.s_addr = inet_addr("127.0.0.1"); //inet_addr ip adresini bilgisayarın anlayabileceği şekle getirir
-    serverAddress.sin_port = htons(8081);// Little Endian yani pc tersten yazdığı için sayıları biz internetin anlayabileceği düz şekle htons ile getirdik
+    serverAddress.sin_port = htons(Config::NANO_PROXY_PORT);// Little Endian yani pc tersten yazdığı için sayıları biz internetin anlayabileceği düz şekle htons ile getirdik
 
     //oluşturduğumuz serverAddress değişkenini  kendi oluşturduğumuz sockete mbağlıyoruz bind ediyoruz
     //(sockaddr*)&serverAddress casting işlemi var
@@ -112,7 +113,7 @@ void ProxyServer::start()
     }
     else
     {
-        cout << "Proxy 127.0.0.1:8081 uzerinde dinleniyor "<< endl;
+        logLine("Proxy 127.0.0.1:" + to_string(Config::NANO_PROXY_PORT) + " uzerinde dinleniyor");
     }
 
    // setSystemProxy(true);
@@ -219,7 +220,7 @@ void ProxyServer::handleClient(SOCKET clientSocket) {
         if(dnsStatus != 0)
         {
             //adres bulunamadıysa ya da başka bir hata olduysa
-            cerr << "getaddrinfo() failed: " << dnsStatus << endl;
+            logLine("getaddrinfo() failed: " + to_string(dnsStatus) + " | Host: " + host);
             closesocket(clientSocket);
             return;
 
@@ -300,6 +301,10 @@ void ProxyServer::handleClient(SOCKET clientSocket) {
 
         bool ilkPaketMi = true;
 
+        //Split işleminde kullanılan değişkenleri daha kolay değiştirmek için
+        const int DPI_SPLIT_POINT = 1;
+        const int DPI_DELAY_MS = 10;
+
 
         while (true)
         {
@@ -332,10 +337,10 @@ void ProxyServer::handleClient(SOCKET clientSocket) {
 
                 // İlk client paketini bölüyoruz.
                 // HTTPS CONNECT sonrası ilk gelen veri genelde TLS ClientHello olur.
-                if (ilkPaketMi && bytesRcvd > 5)
+                if (Config::DPI_SPLIT_ENABLED && ilkPaketMi && bytesRcvd > Config::DPI_SPLIT_POINT)
                 {
                     //Giden byteların nerden bölünceğini tutan değişken
-                    int bolunmeNoktasi = 1;
+                    int bolunmeNoktasi = Config::DPI_SPLIT_POINT;
 
                     if (!sendAll(targetSocket, tunelBuffer, bolunmeNoktasi))
                     {
@@ -343,7 +348,7 @@ void ProxyServer::handleClient(SOCKET clientSocket) {
                     }
 
                     //Böldüğümüz kısımların arasına bekleme süresi koyuruz bunun sebebi işletim sistemiz ya da herhangi başka bir ağ sağlayıcısı istekleri bekletip gönderirse diye
-                    Sleep(10);
+                    Sleep(Config::DPI_SPLIT_DELAY_MS);
 
                     if (!sendAll(targetSocket, tunelBuffer + bolunmeNoktasi, bytesRcvd - bolunmeNoktasi))
                     {
