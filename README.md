@@ -39,3 +39,9 @@ Proje saf C++ ve Windows soket kütüphanesi (`winsock2`) kullanılarak gelişti
 cd build
 cmake ..
 cmake --build . --config Release
+
+### Kullanım
+1. Oluşturulan NanoDPI.exe dosyasına çift tıklayarak çalıştırın.
+2. Siyah terminal ekranı açılacak ve "Sistem Proxy ayarları otomatik açıldı" mesajı belirecektir.
+3. Artık tarayıcınızdan Discord'a veya istediğiniz siteye girebilirsiniz.
+4. Programı sonlandırmak için pencerenin sağ üst köşesindeki X (Kapat) tuşuna basmanız yeterlidir. Tüm internet ayarlarınız otomatik olarak güvenli bir şekilde eski haline dönecektir.
