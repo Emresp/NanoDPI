@@ -45,3 +45,9 @@ cmake --build . --config Release
 2. Siyah terminal ekranı açılacak ve "Sistem Proxy ayarları otomatik açıldı" mesajı belirecektir.
 3. Artık tarayıcınızdan Discord'a veya istediğiniz siteye girebilirsiniz.
 4. Programı sonlandırmak için pencerenin sağ üst köşesindeki X (Kapat) tuşuna basmanız yeterlidir. Tüm internet ayarlarınız otomatik olarak güvenli bir şekilde eski haline dönecektir.
+
+### 📥 Kolay Kurulum (Derlenmiş Hazır Sürüm)
+Kodları derlemekle uğraşmak istemiyorsanız, doğrudan çalışmaya hazır `.exe` dosyasını indirebilirsiniz:
+1. Sağ taraftaki **[Releases](https://github.com/kullaniciadiniz/NanoDPI/releases)** sayfasına gidin.
+2. En son sürüme tıklayıp `NanoDPI.exe` dosyasını indirin.
+3. Çift tıklayıp çalıştırın. Siyah ekran açık kaldığı sürece proxy'niz devrede olacaktır.
