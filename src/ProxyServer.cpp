@@ -52,7 +52,7 @@ ProxyServer::ProxyServer()
 ProxyServer::~ProxyServer()
 {
 
-    //setSystemProxy(false);
+    setSystemProxy(false);
     WSACleanup();
 }
 
@@ -116,7 +116,7 @@ void ProxyServer::start()
         logLine("Proxy 127.0.0.1:" + to_string(Config::NANO_PROXY_PORT) + " uzerinde dinleniyor");
     }
 
-   // setSystemProxy(true);
+    setSystemProxy(true);
 
     //paketleri her zaman yakalayabilmesi için sonsuz döngü
     while (true)
@@ -355,10 +355,7 @@ void ProxyServer::handleClient(SOCKET clientSocket) {
                         break;
                     }
 
-                    cout << "[*] DPI Split: ClientHello bolundu "
-                         << bolunmeNoktasi << " + "
-                         << (bytesRcvd - bolunmeNoktasi)
-                         << " byte" << endl;
+                    logLine("[*] DPI Split: ClientHello bolundu " + to_string(bolunmeNoktasi) + " + " + to_string(bytesRcvd - bolunmeNoktasi) + " byte");
 
                     ilkPaketMi = false;
                 }
@@ -417,9 +414,9 @@ void ProxyServer::setSystemProxy(bool enable)
         //0 parametersi default değer
         RegSetValueExA(hKey, "ProxyEnable", 0, REG_DWORD, (const BYTE*)&proxyEnable, sizeof(proxyEnable));
 
-        // 2. ProxyServer adresini bizim programımız olarak ayarla
-        const char* proxyServer = "127.0.0.1:8081";
-        RegSetValueExA(hKey, "ProxyServer", 0, REG_SZ, (const BYTE*)proxyServer, strlen(proxyServer));
+        //proxy adresi değiştime yani işletim sisteminde ara sunucu ayarı yapar
+        string proxyAdres = "127.0.0.1:" + to_string(Config::NANO_PROXY_PORT);
+        RegSetValueExA(hKey, "ProxyServer", 0, REG_SZ, (const BYTE*)proxyAdres.c_str(), proxyAdres.length());
     }
     else
     {

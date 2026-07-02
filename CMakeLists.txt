@@ -9,7 +9,6 @@ add_executable(NanoDPI src/main.cpp
         include/Config.h
         include/Logger.h
         src/Logger.cpp
-        include/SystemProxy.h
-        src/SystemProxy.cpp)
+)
 
 target_link_libraries(NanoDPI ws2_32 wininet)

@@ -17,15 +17,15 @@ class ProxyServer
     //Socketi tek tuşla başlatmak için start metodu
     void start();
 
+    //Windows proxy ayarlarını yönetebilmek için
+    void setSystemProxy(bool enable);
+
     private:
     //SOCKET yapısında serversocket adında socket bilgilerini tutucak değişken
     SOCKET serverSocket;
 
     //Yakalanan istekler üzerinden işlem yapabilmek için
     void handleClient(SOCKET clientSocket);
-
-    //Windows proxy ayarlarını yönetebilmek için
-    void setSystemProxy(bool enable);
 
 
 
